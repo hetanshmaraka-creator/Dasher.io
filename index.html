@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Mini Geometry Dash - Designed Skins</title>
+<title>Geometry Dash Full Engine Pro</title>
 <style>
 body{
     margin:0;
@@ -15,29 +15,18 @@ canvas{
     background:#222;
     border:3px solid white;
 }
-button{
-    padding:10px;
-    margin:5px;
-}
 </style>
 </head>
 <body>
 
-<h1>Geometry Dash - Skin Designs</h1>
+<h2>Geometry Dash Engine PRO</h2>
 
 <div>
+State: <span id="stateText">menu</span> |
+Mode: <span id="modeText">cube</span> |
+Editor: <span id="editorText">off</span> |
 Score: <span id="score">0</span>
-Level: <span id="level">1</span>
 </div>
-
-<br>
-
-<button onclick="setSkin('classic')">Classic Cyan</button>
-<button onclick="setSkin('fire')">Fire Cube</button>
-<button onclick="setSkin('neon')">Neon Core</button>
-<button onclick="setSkin('checker')">Checker Cube</button>
-
-<br><br>
 
 <canvas id="game" width="900" height="400"></canvas>
 
@@ -45,75 +34,112 @@ Level: <span id="level">1</span>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-// ===== PLAYER =====
+// ================= STATE =================
+let state = "menu";
+let editor = false;
+
+// ================= PLAYER =================
 const player = {
     x:100,
-    y:320,
+    y:300,
     w:40,
     h:40,
-    dy:0,
-    gravity:0.8,
-    angle:0,
-    scaleX:1,
-    scaleY:1,
-    onGround:false
+    dy:0
 };
 
-// ===== SKINS (DESIGNS NOT JUST COLORS) =====
-const skins = {
-    classic:{
-        base:"#00ffff",
-        pattern:"none"
-    },
-    fire:{
-        base:"#ff3300",
-        pattern:"stripes"
-    },
-    neon:{
-        base:"#39ff14",
-        pattern:"glow"
-    },
-    checker:{
-        base:"#ffcc00",
-        pattern:"checker"
-    }
-};
+// ================= GAME =================
+let mode = "cube";
+let speed = 7;
+let gravity = 0.8;
 
-let currentSkin = skins.classic;
-
-// ===== TRAIL =====
-let trail = [];
-const TRAIL_LEN = 10;
-
-// ===== GAME =====
-let score = 0;
-let level = 1;
 let obstacles = [];
+let customLevel = JSON.parse(localStorage.getItem("level")) || [];
 
-// ===== INPUT =====
-let jumpBuffer = 0;
-let coyoteTime = 0;
+let score = 0;
 
-function jump(){
-    jumpBuffer = 8;
-}
+// ================= MUSIC SYNC (FAKE BEAT SYSTEM) =================
+let beat = false;
+
+setInterval(()=>{
+    beat = true;
+    setTimeout(()=>beat=false,100);
+},500);
+
+// ================= INPUT =================
+let holding = false;
 
 document.addEventListener("keydown",e=>{
-    if(e.code==="Space") jump();
-});
-canvas.addEventListener("click",jump);
 
-// ===== SKIN SELECT =====
-function setSkin(name){
-    currentSkin = skins[name];
+    // MENU START
+    if(state === "menu"){
+        if(e.code==="Space"){
+            state = "play";
+            document.getElementById("stateText").textContent = "play";
+        }
+        return;
+    }
+
+    if(e.code==="Space") holding = true;
+
+    if(e.code==="KeyE"){
+        editor = !editor;
+        document.getElementById("editorText").textContent = editor ? "on" : "off";
+    }
+
+    if(e.code==="KeyS"){
+        localStorage.setItem("level", JSON.stringify(customLevel));
+        alert("Level Saved!");
+    }
+
+    if(e.code==="KeyL"){
+        customLevel = JSON.parse(localStorage.getItem("level") || "[]");
+        alert("Level Loaded!");
+    }
+
+    if(e.code==="Digit1") setMode("cube");
+    if(e.code==="Digit2") setMode("ufo");
+    if(e.code==="Digit3") setMode("ship");
+    if(e.code==="Digit4") setMode("wave");
+    if(e.code==="Digit5") setMode("robot");
+});
+
+document.addEventListener("keyup",e=>{
+    if(e.code==="Space") holding = false;
+});
+
+canvas.addEventListener("click",(e)=>{
+
+    if(state === "menu"){
+        state = "play";
+        document.getElementById("stateText").textContent = "play";
+        return;
+    }
+
+    if(editor){
+        const r = canvas.getBoundingClientRect();
+        let x = e.clientX - r.left;
+        let y = e.clientY - r.top;
+
+        customLevel.push({x,y,w:40,h:40});
+    }
+
+    holding = true;
+});
+
+// ================= MODE =================
+function setMode(m){
+    mode = m;
+    document.getElementById("modeText").textContent = m;
 }
 
-// ===== OBSTACLES =====
+// ================= SPAWN =================
 setInterval(()=>{
+    if(state !== "play") return;
+
     obstacles.push({x:900,y:320,w:40,h:40});
 },1200);
 
-// ===== COLLISION =====
+// ================= COLLISION =================
 function hit(a,b){
     return a.x < b.x + b.w &&
            a.x + a.w > b.x &&
@@ -121,127 +147,53 @@ function hit(a,b){
            a.y + a.h > b.y;
 }
 
-// ===== TRAIL =====
-function addTrail(){
-    trail.push({
-        x:player.x,
-        y:player.y,
-        alpha:1
-    });
-
-    if(trail.length > TRAIL_LEN){
-        trail.shift();
-    }
-}
-
-// ===== DRAW SKIN DESIGN =====
-function drawSkin(x,y,w,h,skin,alpha=1){
-
-    ctx.save();
-    ctx.globalAlpha = alpha;
-
-    // base cube
-    ctx.fillStyle = skin.base;
-    ctx.fillRect(x,y,w,h);
-
-    // patterns
-    if(skin.pattern === "stripes"){
-        ctx.fillStyle = "rgba(0,0,0,0.3)";
-        for(let i=0;i<4;i++){
-            ctx.fillRect(x + i*(w/4), y, w/8, h);
-        }
-    }
-
-    if(skin.pattern === "checker"){
-        for(let i=0;i<4;i++){
-            for(let j=0;j<4;j++){
-                if((i+j)%2==0){
-                    ctx.fillStyle = "rgba(0,0,0,0.25)";
-                    ctx.fillRect(x+i*(w/4), y+j*(h/4), w/4, h/4);
-                }
-            }
-        }
-    }
-
-    if(skin.pattern === "glow"){
-        ctx.shadowColor = skin.base;
-        ctx.shadowBlur = 15;
-        ctx.fillStyle = skin.base;
-        ctx.fillRect(x,y,w,h);
-    }
-
-    ctx.restore();
-}
-
-// ===== GAME OVER =====
-function gameOver(){
-    alert("Game Over! Score: " + Math.floor(score/10));
-    location.reload();
-}
-
-// ===== LOOP =====
+// ================= LOOP =================
 function loop(){
 
     ctx.clearRect(0,0,900,400);
 
-    // ground
-    ctx.fillStyle="lime";
+    // ================= MENU =================
+    if(state === "menu"){
+        ctx.fillStyle="white";
+        ctx.font="40px Arial";
+        ctx.fillText("GEOMETRY DASH ENGINE PRO",150,140);
+
+        ctx.font="20px Arial";
+        ctx.fillText("Press SPACE or CLICK to Start",240,200);
+
+        ctx.fillText("E = Editor | S = Save | L = Load",220,250);
+
+        requestAnimationFrame(loop);
+        return;
+    }
+
+    // ================= BEAT EFFECT =================
+    ctx.fillStyle = beat ? "#0f0" : "lime";
     ctx.fillRect(0,360,900,40);
 
-    // physics
-    player.dy += player.gravity;
+    // ================= PHYSICS =================
+    if(mode === "cube") player.dy += gravity;
+    if(mode === "ufo") player.dy += 0.4;
+    if(mode === "ship") player.dy += holding ? -0.6 : 0.6;
+    if(mode === "wave") player.dy = holding ? -6 : 6;
+    if(mode === "robot"){
+        if(holding && player.dy === 0) player.dy = -18;
+        player.dy += gravity;
+    }
+
     player.y += player.dy;
 
-    if(player.y >= 320){
-        player.y = 320;
-        player.dy = 0;
-        player.onGround = true;
-        coyoteTime = 6;
-    } else {
-        player.onGround = false;
-        coyoteTime--;
-    }
+    if(player.y > 320){ player.y = 320; player.dy = 0; }
+    if(player.y < 0){ player.y = 0; player.dy = 0; }
 
-    if(jumpBuffer > 0) jumpBuffer--;
+    // ================= PLAYER =================
+    ctx.fillStyle = beat ? "yellow" : "cyan";
+    ctx.fillRect(player.x,player.y,player.w,player.h);
 
-    if(jumpBuffer > 0 && coyoteTime > 0){
-        player.dy = -15;
-        jumpBuffer = 0;
-        coyoteTime = 0;
-    }
-
-    // trail update
-    addTrail();
-
-    // draw trail
-    for(let i=0;i<trail.length;i++){
-        let t = trail[i];
-        t.alpha -= 0.1;
-
-        drawSkin(t.x,t.y,player.w,player.h,currentSkin,t.alpha);
-    }
-
-    // animation
-    player.angle += player.dy * 0.02;
-    if(player.onGround) player.angle *= 0.7;
-
-    player.scaleX += (1 - player.scaleX)*0.2;
-    player.scaleY += (1 - player.scaleY)*0.2;
-
-    // player draw
-    ctx.save();
-    ctx.translate(player.x+20,player.y+20);
-    ctx.rotate(player.angle);
-    ctx.scale(player.scaleX,player.scaleY);
-
-    drawSkin(-20,-20,40,40,currentSkin,1);
-
-    ctx.restore();
-
-    // obstacles
+    // ================= OBSTACLES =================
     for(let i=obstacles.length-1;i>=0;i--){
         let o = obstacles[i];
-        o.x -= 7;
+        o.x -= speed;
 
         ctx.fillStyle="red";
         ctx.beginPath();
@@ -251,19 +203,29 @@ function loop(){
         ctx.fill();
 
         if(hit(player,o)){
-            gameOver();
-            return;
+            alert("Game Over! Score: " + score);
+            location.reload();
         }
 
-        if(o.x < -50) obstacles.splice(i,1);
+        if(o.x < -60) obstacles.splice(i,1);
     }
 
-    // score
+    // ================= CUSTOM LEVEL =================
+    for(let b of customLevel){
+        ctx.fillStyle="purple";
+        ctx.fillRect(b.x,b.y,b.w,b.h);
+
+        if(hit(player,b)){
+            alert("Hit custom block!");
+            location.reload();
+        }
+
+        b.x -= speed;
+    }
+
+    // ================= SCORE =================
     score++;
     document.getElementById("score").textContent = Math.floor(score/10);
-
-    level = 1 + Math.floor(score/300);
-    document.getElementById("level").textContent = level;
 
     requestAnimationFrame(loop);
 }
