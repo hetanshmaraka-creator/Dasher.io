@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Mini Geometry Dash</title>
+<title>Mini Geometry Dash - Designed Skins</title>
 <style>
 body{
     margin:0;
@@ -11,29 +11,31 @@ body{
     font-family:Arial;
     text-align:center;
 }
-button{
-    padding:10px;
-    margin:5px;
-}
 canvas{
     background:#222;
     border:3px solid white;
+}
+button{
+    padding:10px;
+    margin:5px;
 }
 </style>
 </head>
 <body>
 
-<h1>Mini Geometry Dash</h1>
+<h1>Geometry Dash - Skin Designs</h1>
 
 <div>
-Coins: <span id="coins">0</span>
 Score: <span id="score">0</span>
-High Score: <span id="highscore">0</span>
+Level: <span id="level">1</span>
 </div>
 
-<button onclick="buySkin('cyan',10)">Cyan Skin (10)</button>
-<button onclick="buySkin('yellow',20)">Yellow Skin (20)</button>
-<button onclick="buySkin('lime',30)">Lime Skin (30)</button>
+<br>
+
+<button onclick="setSkin('classic')">Classic Cyan</button>
+<button onclick="setSkin('fire')">Fire Cube</button>
+<button onclick="setSkin('neon')">Neon Core</button>
+<button onclick="setSkin('checker')">Checker Cube</button>
 
 <br><br>
 
@@ -43,14 +45,6 @@ High Score: <span id="highscore">0</span>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-// ===== DATA =====
-let coins = Number(localStorage.getItem("coins")) || 0;
-let skin = localStorage.getItem("skin") || "cyan";
-let highScore = Number(localStorage.getItem("highScore")) || 0;
-
-document.getElementById("coins").textContent = coins;
-document.getElementById("highscore").textContent = highScore;
-
 // ===== PLAYER =====
 const player = {
     x:100,
@@ -58,103 +52,134 @@ const player = {
     w:40,
     h:40,
     dy:0,
-    gravity:0.8
+    gravity:0.8,
+    angle:0,
+    scaleX:1,
+    scaleY:1,
+    onGround:false
 };
 
-// ===== GAME STATE =====
+// ===== SKINS (DESIGNS NOT JUST COLORS) =====
+const skins = {
+    classic:{
+        base:"#00ffff",
+        pattern:"none"
+    },
+    fire:{
+        base:"#ff3300",
+        pattern:"stripes"
+    },
+    neon:{
+        base:"#39ff14",
+        pattern:"glow"
+    },
+    checker:{
+        base:"#ffcc00",
+        pattern:"checker"
+    }
+};
+
+let currentSkin = skins.classic;
+
+// ===== TRAIL =====
+let trail = [];
+const TRAIL_LEN = 10;
+
+// ===== GAME =====
 let score = 0;
+let level = 1;
 let obstacles = [];
-let coinItems = [];
-let jumpPads = [];
-let portals = [];
 
-let gravityFlipped = false;
-
-// ===== SMOOTH JUMP SYSTEM =====
+// ===== INPUT =====
 let jumpBuffer = 0;
 let coyoteTime = 0;
 
-// ===== SKIN SHOP =====
-function buySkin(color, cost){
-    if(coins >= cost){
-        coins -= cost;
-        skin = color;
-
-        localStorage.setItem("coins", coins);
-        localStorage.setItem("skin", skin);
-
-        document.getElementById("coins").textContent = coins;
-        alert("Skin Equipped!");
-    }
-}
-
-// ===== INPUT =====
 function jump(){
-    jumpBuffer = 10;
+    jumpBuffer = 8;
 }
 
 document.addEventListener("keydown",e=>{
     if(e.code==="Space") jump();
 });
-
 canvas.addEventListener("click",jump);
 
-// ===== SPIKE PATTERNS =====
-const patterns = [
-    [0,0,1,0,1],
-    [0,1,0,1,0],
-    [1,0,0,1,0],
-    [0,1,1,0,0],
-    [1,0,1,0,1],
-    [0,0,0,1,1],
-];
+// ===== SKIN SELECT =====
+function setSkin(name){
+    currentSkin = skins[name];
+}
 
-let patternIndex = 0;
-
-// spawn spikes
+// ===== OBSTACLES =====
 setInterval(()=>{
-    let pattern = patterns[patternIndex];
-
-    for(let i=0;i<pattern.length;i++){
-        if(pattern[i]===1){
-            obstacles.push({
-                x:900 + i*60,
-                y:340,
-                w:40,
-                h:40
-            });
-        }
-    }
-
-    patternIndex++;
-    if(patternIndex >= patterns.length) patternIndex = 0;
-
-},1400);
-
-// coins
-setInterval(()=>{
-    coinItems.push({x:900,y:250,r:12});
-},2000);
-
-// jump pads
-setInterval(()=>{
-    jumpPads.push({x:900,y:340,w:40,h:10});
-},5000);
-
-// portals
-setInterval(()=>{
-    portals.push({x:900,y:280,w:20,h:80});
-},7000);
+    obstacles.push({x:900,y:320,w:40,h:40});
+},1200);
 
 // ===== COLLISION =====
 function hit(a,b){
-    return a.x < b.x+b.w &&
-           a.x+a.w > b.x &&
-           a.y < b.y+b.h &&
-           a.y+a.h > b.y;
+    return a.x < b.x + b.w &&
+           a.x + a.w > b.x &&
+           a.y < b.y + b.h &&
+           a.y + a.h > b.y;
 }
 
-// ===== GAME LOOP =====
+// ===== TRAIL =====
+function addTrail(){
+    trail.push({
+        x:player.x,
+        y:player.y,
+        alpha:1
+    });
+
+    if(trail.length > TRAIL_LEN){
+        trail.shift();
+    }
+}
+
+// ===== DRAW SKIN DESIGN =====
+function drawSkin(x,y,w,h,skin,alpha=1){
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // base cube
+    ctx.fillStyle = skin.base;
+    ctx.fillRect(x,y,w,h);
+
+    // patterns
+    if(skin.pattern === "stripes"){
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        for(let i=0;i<4;i++){
+            ctx.fillRect(x + i*(w/4), y, w/8, h);
+        }
+    }
+
+    if(skin.pattern === "checker"){
+        for(let i=0;i<4;i++){
+            for(let j=0;j<4;j++){
+                if((i+j)%2==0){
+                    ctx.fillStyle = "rgba(0,0,0,0.25)";
+                    ctx.fillRect(x+i*(w/4), y+j*(h/4), w/4, h/4);
+                }
+            }
+        }
+    }
+
+    if(skin.pattern === "glow"){
+        ctx.shadowColor = skin.base;
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = skin.base;
+        ctx.fillRect(x,y,w,h);
+    }
+
+    ctx.restore();
+}
+
+// ===== GAME OVER =====
+function gameOver(){
+    alert("Game Over! Score: " + Math.floor(score/10));
+    location.reload();
+}
+
+// ===== LOOP =====
 function loop(){
 
     ctx.clearRect(0,0,900,400);
@@ -163,49 +188,59 @@ function loop(){
     ctx.fillStyle="lime";
     ctx.fillRect(0,360,900,40);
 
-    // ===== INPUT TIMERS =====
-    if(jumpBuffer > 0) jumpBuffer--;
-
-    // ===== GRAVITY =====
-    player.dy += gravityFlipped ? -player.gravity : player.gravity;
+    // physics
+    player.dy += player.gravity;
     player.y += player.dy;
 
-    // landing + coyote time
-    if(!gravityFlipped){
-        if(player.y >= 320){
-            player.y = 320;
-            player.dy = 0;
-            coyoteTime = 6;
-        } else {
-            coyoteTime--;
-        }
+    if(player.y >= 320){
+        player.y = 320;
+        player.dy = 0;
+        player.onGround = true;
+        coyoteTime = 6;
     } else {
-        if(player.y <= 0){
-            player.y = 0;
-            player.dy = 0;
-            coyoteTime = 6;
-        } else {
-            coyoteTime--;
-        }
+        player.onGround = false;
+        coyoteTime--;
     }
 
-    // execute jump (buffer + coyote)
+    if(jumpBuffer > 0) jumpBuffer--;
+
     if(jumpBuffer > 0 && coyoteTime > 0){
-        if(!gravityFlipped){
-            player.dy = -15;
-        } else {
-            player.dy = 15;
-        }
+        player.dy = -15;
         jumpBuffer = 0;
         coyoteTime = 0;
     }
 
-    // draw player
-    ctx.fillStyle = skin;
-    ctx.fillRect(player.x,player.y,40,40);
+    // trail update
+    addTrail();
 
-    // ===== OBSTACLES =====
-    obstacles.forEach((o,index)=>{
+    // draw trail
+    for(let i=0;i<trail.length;i++){
+        let t = trail[i];
+        t.alpha -= 0.1;
+
+        drawSkin(t.x,t.y,player.w,player.h,currentSkin,t.alpha);
+    }
+
+    // animation
+    player.angle += player.dy * 0.02;
+    if(player.onGround) player.angle *= 0.7;
+
+    player.scaleX += (1 - player.scaleX)*0.2;
+    player.scaleY += (1 - player.scaleY)*0.2;
+
+    // player draw
+    ctx.save();
+    ctx.translate(player.x+20,player.y+20);
+    ctx.rotate(player.angle);
+    ctx.scale(player.scaleX,player.scaleY);
+
+    drawSkin(-20,-20,40,40,currentSkin,1);
+
+    ctx.restore();
+
+    // obstacles
+    for(let i=obstacles.length-1;i>=0;i--){
+        let o = obstacles[i];
         o.x -= 7;
 
         ctx.fillStyle="red";
@@ -216,81 +251,19 @@ function loop(){
         ctx.fill();
 
         if(hit(player,o)){
-            let finalScore = Math.floor(score/10);
-
-            if(finalScore > highScore){
-                highScore = finalScore;
-                localStorage.setItem("highScore", highScore);
-            }
-
-            alert("Game Over! Score: " + finalScore + " | High Score: " + highScore);
-            location.reload();
+            gameOver();
+            return;
         }
 
-        if(o.x < -50) obstacles.splice(index,1);
-    });
-
-    // ===== COINS =====
-    coinItems.forEach((c,index)=>{
-        c.x -= 7;
-
-        ctx.fillStyle="gold";
-        ctx.beginPath();
-        ctx.arc(c.x,c.y,c.r,0,Math.PI*2);
-        ctx.fill();
-
-        let dx=(player.x+20)-c.x;
-        let dy=(player.y+20)-c.y;
-
-        if(Math.sqrt(dx*dx+dy*dy)<30){
-            coins++;
-            localStorage.setItem("coins",coins);
-            document.getElementById("coins").textContent=coins;
-            coinItems.splice(index,1);
-        }
-
-        if(c.x < -50) coinItems.splice(index,1);
-    });
-
-    // ===== JUMP PADS =====
-    jumpPads.forEach((p,index)=>{
-        p.x -= 7;
-
-        ctx.fillStyle="yellow";
-        ctx.fillRect(p.x,p.y,p.w,p.h);
-
-        if(hit(player,p)){
-            player.dy = -20;
-        }
-
-        if(p.x < -50) jumpPads.splice(index,1);
-    });
-
-    // ===== PORTALS =====
-    portals.forEach((p,index)=>{
-        p.x -= 7;
-
-        ctx.fillStyle="purple";
-        ctx.fillRect(p.x,p.y,p.w,p.h);
-
-        if(hit(player,p)){
-            gravityFlipped = !gravityFlipped;
-        }
-
-        if(p.x < -50) portals.splice(index,1);
-    });
-
-    // ===== SCORE =====
-    score++;
-    let displayScore = Math.floor(score/10);
-
-    document.getElementById("score").textContent = displayScore;
-    document.getElementById("highscore").textContent = highScore;
-
-    if(displayScore > highScore){
-        highScore = displayScore;
-        localStorage.setItem("highScore", highScore);
+        if(o.x < -50) obstacles.splice(i,1);
     }
+
+    // score
+    score++;
+    document.getElementById("score").textContent = Math.floor(score/10);
+
+    level = 1 + Math.floor(score/300);
+    document.getElementById("level").textContent = level;
 
     requestAnimationFrame(loop);
 }
