@@ -43,7 +43,7 @@ High Score: <span id="highscore">0</span>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-// ===== SAVE DATA =====
+// ===== DATA =====
 let coins = Number(localStorage.getItem("coins")) || 0;
 let skin = localStorage.getItem("skin") || "cyan";
 let highScore = Number(localStorage.getItem("highScore")) || 0;
@@ -51,7 +51,30 @@ let highScore = Number(localStorage.getItem("highScore")) || 0;
 document.getElementById("coins").textContent = coins;
 document.getElementById("highscore").textContent = highScore;
 
-// ===== SHOP =====
+// ===== PLAYER =====
+const player = {
+    x:100,
+    y:320,
+    w:40,
+    h:40,
+    dy:0,
+    gravity:0.8
+};
+
+// ===== GAME STATE =====
+let score = 0;
+let obstacles = [];
+let coinItems = [];
+let jumpPads = [];
+let portals = [];
+
+let gravityFlipped = false;
+
+// ===== SMOOTH JUMP SYSTEM =====
+let jumpBuffer = 0;
+let coyoteTime = 0;
+
+// ===== SKIN SHOP =====
 function buySkin(color, cost){
     if(coins >= cost){
         coins -= cost;
@@ -65,24 +88,16 @@ function buySkin(color, cost){
     }
 }
 
-// ===== PLAYER =====
-const player = {
-    x:100,
-    y:320,
-    w:40,
-    h:40,
-    dy:0,
-    gravity:0.8
-};
+// ===== INPUT =====
+function jump(){
+    jumpBuffer = 10;
+}
 
-let score = 0;
+document.addEventListener("keydown",e=>{
+    if(e.code==="Space") jump();
+});
 
-let obstacles = [];
-let coinItems = [];
-let jumpPads = [];
-let portals = [];
-
-let gravityFlipped = false;
+canvas.addEventListener("click",jump);
 
 // ===== SPIKE PATTERNS =====
 const patterns = [
@@ -90,19 +105,20 @@ const patterns = [
     [0,1,0,1,0],
     [1,0,0,1,0],
     [0,1,1,0,0],
-    [1,0,1,0,1]
+    [1,0,1,0,1],
+    [0,0,0,1,1],
 ];
 
 let patternIndex = 0;
 
-// ===== OBSTACLES =====
+// spawn spikes
 setInterval(()=>{
     let pattern = patterns[patternIndex];
 
-    for(let i = 0; i < pattern.length; i++){
-        if(pattern[i] === 1){
+    for(let i=0;i<pattern.length;i++){
+        if(pattern[i]===1){
             obstacles.push({
-                x:900 + i * 60,
+                x:900 + i*60,
                 y:340,
                 w:40,
                 h:40
@@ -111,58 +127,24 @@ setInterval(()=>{
     }
 
     patternIndex++;
-    if(patternIndex >= patterns.length){
-        patternIndex = 0;
-    }
-}, 1400);
+    if(patternIndex >= patterns.length) patternIndex = 0;
 
-// ===== COINS =====
+},1400);
+
+// coins
 setInterval(()=>{
-    coinItems.push({
-        x:900,
-        y:250,
-        r:12
-    });
-}, 2000);
+    coinItems.push({x:900,y:250,r:12});
+},2000);
 
-// ===== JUMP PADS =====
+// jump pads
 setInterval(()=>{
-    jumpPads.push({
-        x:900,
-        y:340,
-        w:40,
-        h:10
-    });
-}, 5000);
+    jumpPads.push({x:900,y:340,w:40,h:10});
+},5000);
 
-// ===== GRAVITY PORTALS =====
+// portals
 setInterval(()=>{
-    portals.push({
-        x:900,
-        y:280,
-        w:20,
-        h:80
-    });
-}, 7000);
-
-// ===== JUMP =====
-function jump(){
-    if(!gravityFlipped){
-        if(player.y >= 320){
-            player.dy = -15;
-        }
-    } else {
-        if(player.y <= 40){
-            player.dy = 15;
-        }
-    }
-}
-
-document.addEventListener("keydown",e=>{
-    if(e.code==="Space") jump();
-});
-
-canvas.addEventListener("click",jump);
+    portals.push({x:900,y:280,w:20,h:80});
+},7000);
 
 // ===== COLLISION =====
 function hit(a,b){
@@ -181,27 +163,48 @@ function loop(){
     ctx.fillStyle="lime";
     ctx.fillRect(0,360,900,40);
 
-    // gravity
+    // ===== INPUT TIMERS =====
+    if(jumpBuffer > 0) jumpBuffer--;
+
+    // ===== GRAVITY =====
     player.dy += gravityFlipped ? -player.gravity : player.gravity;
     player.y += player.dy;
 
+    // landing + coyote time
     if(!gravityFlipped){
-        if(player.y > 320){
+        if(player.y >= 320){
             player.y = 320;
             player.dy = 0;
+            coyoteTime = 6;
+        } else {
+            coyoteTime--;
         }
     } else {
-        if(player.y < 0){
+        if(player.y <= 0){
             player.y = 0;
             player.dy = 0;
+            coyoteTime = 6;
+        } else {
+            coyoteTime--;
         }
     }
 
-    // player
+    // execute jump (buffer + coyote)
+    if(jumpBuffer > 0 && coyoteTime > 0){
+        if(!gravityFlipped){
+            player.dy = -15;
+        } else {
+            player.dy = 15;
+        }
+        jumpBuffer = 0;
+        coyoteTime = 0;
+    }
+
+    // draw player
     ctx.fillStyle = skin;
     ctx.fillRect(player.x,player.y,40,40);
 
-    // ===== SPIKES =====
+    // ===== OBSTACLES =====
     obstacles.forEach((o,index)=>{
         o.x -= 7;
 
@@ -257,7 +260,7 @@ function loop(){
         ctx.fillRect(p.x,p.y,p.w,p.h);
 
         if(hit(player,p)){
-            player.dy = -20; // big jump boost
+            player.dy = -20;
         }
 
         if(p.x < -50) jumpPads.splice(index,1);
