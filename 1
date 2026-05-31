@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Mini Geometry Dash</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+button{
+    padding:10px;
+    margin:5px;
+}
+canvas{
+    background:#222;
+    border:3px solid white;
+}
+</style>
+</head>
+<body>
+
+<h1>Mini Geometry Dash</h1>
+
+<div>
+Coins: <span id="coins">0</span>
+Score: <span id="score">0</span>
+</div>
+
+<button onclick="buySkin('cyan',10)">Cyan Skin (10)</button>
+<button onclick="buySkin('yellow',20)">Yellow Skin (20)</button>
+<button onclick="buySkin('lime',30)">Lime Skin (30)</button>
+
+<br><br>
+
+<canvas id="game" width="900" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let coins = Number(localStorage.getItem("coins")) || 0;
+let skin = localStorage.getItem("skin") || "cyan";
+
+document.getElementById("coins").textContent = coins;
+
+function buySkin(color,cost){
+    if(coins >= cost){
+        coins -= cost;
+        skin = color;
+
+        localStorage.setItem("coins",coins);
+        localStorage.setItem("skin",skin);
+
+        document.getElementById("coins").textContent = coins;
+        alert("Skin Equipped!");
+    }
+}
+
+const player = {
+    x:100,
+    y:320,
+    w:40,
+    h:40,
+    dy:0
+};
+
+let score = 0;
+let obstacles = [];
+let coinItems = [];
+
+const gravity = 0.8;
+
+setInterval(()=>{
+    obstacles.push({
+        x:900,
+        y:340,
+        w:40,
+        h:40
+    });
+},1800);
+
+setInterval(()=>{
+    coinItems.push({
+        x:900,
+        y:250,
+        r:12
+    });
+},2500);
+
+function jump(){
+    if(player.y >= 320){
+        player.dy = -15;
+    }
+}
+
+document.addEventListener("keydown",e=>{
+    if(e.code==="Space"){
+        jump();
+    }
+});
+
+canvas.addEventListener("click",jump);
+
+function hit(a,b){
+    return a.x < b.x+b.w &&
+           a.x+a.w > b.x &&
+           a.y < b.y+b.h &&
+           a.y+a.h > b.y;
+}
+
+function loop(){
+
+    ctx.clearRect(0,0,900,400);
+
+    ctx.fillStyle="lime";
+    ctx.fillRect(0,360,900,40);
+
+    player.dy += gravity;
+    player.y += player.dy;
+
+    if(player.y > 320){
+        player.y = 320;
+        player.dy = 0;
+    }
+
+    ctx.fillStyle=skin;
+    ctx.fillRect(player.x,player.y,40,40);
+
+    obstacles.forEach(o=>{
+        o.x -= 7;
+
+        ctx.fillStyle="red";
+
+        ctx.beginPath();
+        ctx.moveTo(o.x,o.y+40);
+        ctx.lineTo(o.x+20,o.y);
+        ctx.lineTo(o.x+40,o.y+40);
+        ctx.fill();
+
+        if(hit(player,o)){
+            alert("Game Over! Score: "+score);
+            location.reload();
+        }
+    });
+
+    coinItems.forEach((c,index)=>{
+        c.x -= 7;
+
+        ctx.fillStyle="gold";
+        ctx.beginPath();
+        ctx.arc(c.x,c.y,c.r,0,Math.PI*2);
+        ctx.fill();
+
+        let dx=(player.x+20)-c.x;
+        let dy=(player.y+20)-c.y;
+
+        if(Math.sqrt(dx*dx+dy*dy)<30){
+            coins++;
+            localStorage.setItem("coins",coins);
+            document.getElementById("coins").textContent=coins;
+            coinItems.splice(index,1);
+        }
+    });
+
+    score++;
+    document.getElementById("score").textContent =
+        Math.floor(score/10);
+
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>
