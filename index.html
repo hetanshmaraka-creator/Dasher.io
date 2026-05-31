@@ -43,69 +43,128 @@ High Score: <span id="highscore">0</span>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
+// ===== SAVE DATA =====
 let coins = Number(localStorage.getItem("coins")) || 0;
 let skin = localStorage.getItem("skin") || "cyan";
+let highScore = Number(localStorage.getItem("highScore")) || 0;
 
 document.getElementById("coins").textContent = coins;
+document.getElementById("highscore").textContent = highScore;
 
-function buySkin(color,cost){
+// ===== SHOP =====
+function buySkin(color, cost){
     if(coins >= cost){
         coins -= cost;
         skin = color;
 
-        localStorage.setItem("coins",coins);
-        localStorage.setItem("skin",skin);
+        localStorage.setItem("coins", coins);
+        localStorage.setItem("skin", skin);
 
         document.getElementById("coins").textContent = coins;
         alert("Skin Equipped!");
     }
 }
 
+// ===== PLAYER =====
 const player = {
     x:100,
     y:320,
     w:40,
     h:40,
-    dy:0
+    dy:0,
+    gravity:0.8
 };
 
 let score = 0;
+
 let obstacles = [];
 let coinItems = [];
+let jumpPads = [];
+let portals = [];
 
-const gravity = 0.8;
+let gravityFlipped = false;
 
+// ===== SPIKE PATTERNS =====
+const patterns = [
+    [0,0,1,0,1],
+    [0,1,0,1,0],
+    [1,0,0,1,0],
+    [0,1,1,0,0],
+    [1,0,1,0,1]
+];
+
+let patternIndex = 0;
+
+// ===== OBSTACLES =====
 setInterval(()=>{
-    obstacles.push({
-        x:900,
-        y:340,
-        w:40,
-        h:40
-    });
-},1800);
+    let pattern = patterns[patternIndex];
 
+    for(let i = 0; i < pattern.length; i++){
+        if(pattern[i] === 1){
+            obstacles.push({
+                x:900 + i * 60,
+                y:340,
+                w:40,
+                h:40
+            });
+        }
+    }
+
+    patternIndex++;
+    if(patternIndex >= patterns.length){
+        patternIndex = 0;
+    }
+}, 1400);
+
+// ===== COINS =====
 setInterval(()=>{
     coinItems.push({
         x:900,
         y:250,
         r:12
     });
-},2500);
+}, 2000);
 
+// ===== JUMP PADS =====
+setInterval(()=>{
+    jumpPads.push({
+        x:900,
+        y:340,
+        w:40,
+        h:10
+    });
+}, 5000);
+
+// ===== GRAVITY PORTALS =====
+setInterval(()=>{
+    portals.push({
+        x:900,
+        y:280,
+        w:20,
+        h:80
+    });
+}, 7000);
+
+// ===== JUMP =====
 function jump(){
-    if(player.y >= 320){
-        player.dy = -15;
+    if(!gravityFlipped){
+        if(player.y >= 320){
+            player.dy = -15;
+        }
+    } else {
+        if(player.y <= 40){
+            player.dy = 15;
+        }
     }
 }
 
 document.addEventListener("keydown",e=>{
-    if(e.code==="Space"){
-        jump();
-    }
+    if(e.code==="Space") jump();
 });
 
 canvas.addEventListener("click",jump);
 
+// ===== COLLISION =====
 function hit(a,b){
     return a.x < b.x+b.w &&
            a.x+a.w > b.x &&
@@ -113,29 +172,40 @@ function hit(a,b){
            a.y+a.h > b.y;
 }
 
+// ===== GAME LOOP =====
 function loop(){
 
     ctx.clearRect(0,0,900,400);
 
+    // ground
     ctx.fillStyle="lime";
     ctx.fillRect(0,360,900,40);
 
-    player.dy += gravity;
+    // gravity
+    player.dy += gravityFlipped ? -player.gravity : player.gravity;
     player.y += player.dy;
 
-    if(player.y > 320){
-        player.y = 320;
-        player.dy = 0;
+    if(!gravityFlipped){
+        if(player.y > 320){
+            player.y = 320;
+            player.dy = 0;
+        }
+    } else {
+        if(player.y < 0){
+            player.y = 0;
+            player.dy = 0;
+        }
     }
 
-    ctx.fillStyle=skin;
+    // player
+    ctx.fillStyle = skin;
     ctx.fillRect(player.x,player.y,40,40);
 
-    obstacles.forEach(o=>{
+    // ===== SPIKES =====
+    obstacles.forEach((o,index)=>{
         o.x -= 7;
 
         ctx.fillStyle="red";
-
         ctx.beginPath();
         ctx.moveTo(o.x,o.y+40);
         ctx.lineTo(o.x+20,o.y);
@@ -145,16 +215,19 @@ function loop(){
         if(hit(player,o)){
             let finalScore = Math.floor(score/10);
 
-if(finalScore > highScore){
-    highScore = finalScore;
-    localStorage.setItem("highScore", highScore);
-}
+            if(finalScore > highScore){
+                highScore = finalScore;
+                localStorage.setItem("highScore", highScore);
+            }
 
-alert("Game Over! Score: " + finalScore + " | High Score: " + highScore);
-location.reload();
+            alert("Game Over! Score: " + finalScore + " | High Score: " + highScore);
+            location.reload();
         }
+
+        if(o.x < -50) obstacles.splice(index,1);
     });
 
+    // ===== COINS =====
     coinItems.forEach((c,index)=>{
         c.x -= 7;
 
@@ -172,19 +245,49 @@ location.reload();
             document.getElementById("coins").textContent=coins;
             coinItems.splice(index,1);
         }
+
+        if(c.x < -50) coinItems.splice(index,1);
     });
 
+    // ===== JUMP PADS =====
+    jumpPads.forEach((p,index)=>{
+        p.x -= 7;
+
+        ctx.fillStyle="yellow";
+        ctx.fillRect(p.x,p.y,p.w,p.h);
+
+        if(hit(player,p)){
+            player.dy = -20; // big jump boost
+        }
+
+        if(p.x < -50) jumpPads.splice(index,1);
+    });
+
+    // ===== PORTALS =====
+    portals.forEach((p,index)=>{
+        p.x -= 7;
+
+        ctx.fillStyle="purple";
+        ctx.fillRect(p.x,p.y,p.w,p.h);
+
+        if(hit(player,p)){
+            gravityFlipped = !gravityFlipped;
+        }
+
+        if(p.x < -50) portals.splice(index,1);
+    });
+
+    // ===== SCORE =====
     score++;
+    let displayScore = Math.floor(score/10);
 
-let displayScore = Math.floor(score/10);
-document.getElementById("score").textContent = displayScore;
-
-// update high score
-if(displayScore > highScore){
-    highScore = displayScore;
-    localStorage.setItem("highScore", highScore);
+    document.getElementById("score").textContent = displayScore;
     document.getElementById("highscore").textContent = highScore;
-}
+
+    if(displayScore > highScore){
+        highScore = displayScore;
+        localStorage.setItem("highScore", highScore);
+    }
 
     requestAnimationFrame(loop);
 }
@@ -194,4 +297,3 @@ loop();
 
 </body>
 </html>
-document.getElementById("highscore").textContent = highScore;
