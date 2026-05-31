@@ -28,6 +28,7 @@ canvas{
 <div>
 Coins: <span id="coins">0</span>
 Score: <span id="score">0</span>
+High Score: <span id="highscore">0</span>
 </div>
 
 <button onclick="buySkin('cyan',10)">Cyan Skin (10)</button>
@@ -142,8 +143,15 @@ function loop(){
         ctx.fill();
 
         if(hit(player,o)){
-            alert("Game Over! Score: "+score);
-            location.reload();
+            let finalScore = Math.floor(score/10);
+
+if(finalScore > highScore){
+    highScore = finalScore;
+    localStorage.setItem("highScore", highScore);
+}
+
+alert("Game Over! Score: " + finalScore + " | High Score: " + highScore);
+location.reload();
         }
     });
 
@@ -167,8 +175,16 @@ function loop(){
     });
 
     score++;
-    document.getElementById("score").textContent =
-        Math.floor(score/10);
+
+let displayScore = Math.floor(score/10);
+document.getElementById("score").textContent = displayScore;
+
+// update high score
+if(displayScore > highScore){
+    highScore = displayScore;
+    localStorage.setItem("highScore", highScore);
+    document.getElementById("highscore").textContent = highScore;
+}
 
     requestAnimationFrame(loop);
 }
@@ -178,3 +194,4 @@ loop();
 
 </body>
 </html>
+document.getElementById("highscore").textContent = highScore;
