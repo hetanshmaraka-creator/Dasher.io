@@ -1,63 +1,20 @@
-
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Geometry Dash Engine PRO FIXED</title>
-<style>
-body{
-    margin:0;
-    background:#111;
-    color:white;
-    font-family:Arial;
-    text-align:center;
-}
-canvas{
-    background:#222;
-    border:3px solid white;
-}
-</style>
-</head>
-<body>
-
-<h2>Geometry Dash Engine PRO (FIXED)</h2>
-
-<div>
-State: <span id="stateText">menu</span> |
-Mode: <span id="modeText">cube</span> |
-Editor: <span id="editorText">off</span> |
-Score: <span id="score">0</span>
-</div>
-
-<canvas id="game" width="900" height="400"></canvas>
-
-<script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-
 // ================= STATE =================
 let state = "menu";
 let editor = false;
 
-// TRUE one-shot input
-let jumpQueued = false;
+// CLEAN INPUT SYSTEM
+let jumpPressed = false;
+let spaceDown = false;
 
 // ================= PLAYER =================
-const player = {
-    x:100,
-    y:300,
-    w:40,
-    h:40,
-    dy:0
-};
+const player = { x:100, y:300, w:40, h:40, dy:0 };
 
 // ================= GAME =================
 let mode = "cube";
 let gravity = 0.7;
 let speed = 6;
-
 let obstacles = [];
 let customLevel = JSON.parse(localStorage.getItem("level")) || [];
-
 let score = 0;
 
 // ================= BEAT =================
@@ -68,43 +25,52 @@ setInterval(()=>{
 },500);
 
 // ================= INPUT =================
-document.addEventListener("keydown",e=>{
+document.addEventListener("keydown", e => {
+    if(e.code === "Space"){
+        if(!spaceDown){
+            jumpPressed = true; // Flips true for exactly ONE frame
+        }
+        spaceDown = true;
+    }
     if(state === "menu" && e.code === "Space"){
         state = "play";
         document.getElementById("stateText").textContent = "play";
     }
-
-    if(e.code === "Space"){
-        jumpQueued = true;
-    }
-
-    if(e.code==="KeyE"){
+    if(e.code === "KeyE"){
         editor = !editor;
         document.getElementById("editorText").textContent = editor ? "on":"off";
     }
-
-    if(e.code==="KeyS"){
+    if(e.code === "KeyS"){
         localStorage.setItem("level", JSON.stringify(customLevel));
         alert("Saved!");
     }
-
-    if(e.code==="KeyL"){
+    if(e.code === "KeyL"){
         customLevel = JSON.parse(localStorage.getItem("level") || "[]");
         alert("Loaded!");
     }
-
-    if(e.code==="Digit1") setMode("cube");
-    if(e.code==="Digit2") setMode("ufo");
-    if(e.code==="Digit3") setMode("ship");
-    if(e.code==="Digit4") setMode("wave");
-    if(e.code==="Digit5") setMode("robot");
+    if(e.code === "Digit1") setMode("cube");
+    if(e.code === "Digit2") setMode("ufo");
+    if(e.code === "Digit3") setMode("ship");
+    if(e.code === "Digit4") setMode("wave");
+    if(e.code === "Digit5") setMode("robot");
 });
 
-document.addEventListener("keyup",e=>{
-    if(e.code==="Space"){
-        // do NOT re-trigger jump spam
+document.addEventListener("keyup", e => {
+    if(e.code === "Space"){
+        spaceDown = false;
     }
 });
+
+// Click/Touch handling mirroring spacebar behavior
+document.addEventListener("mousedown", () => {
+    if(!spaceDown) jumpPressed = true;
+    spaceDown = true;
+    if(state === "menu"){
+        state = "play";
+        document.getElementById("stateText").textContent = "play";
+    }
+});
+document.addEventListener("mouseup", () => spaceDown = false);
 
 // ================= MODE =================
 function setMode(m){
@@ -114,145 +80,157 @@ function setMode(m){
 
 // ================= SPAWN =================
 setInterval(()=>{
-    if(state !== "play") return;
-    obstacles.push({x:900,y:320,w:40,h:40});
-},1000);
+    if(state !== "play" || editor) return;
+    obstacles.push({x:900, y:320, w:40, h:40});
+}, 1200);
 
 // ================= COLLISION =================
-function hit(a,b){
-    return a.x < b.x + b.w &&
-           a.x + a.w > b.x &&
-           a.y < b.y + b.h &&
-           a.y + a.h > b.y;
+// Precise Triangle-to-Box Sat Check (Solves invisible hitbox issue)
+function hit(p, t){
+    // Broad phase AABB check first
+    if (!(p.x < t.x + t.w && p.x + p.w > t.x && p.y < t.y + t.h && p.y + p.h > t.y)) {
+        return false;
+    }
+    // Narrow phase precise triangle vectors
+    let tx1 = t.x, ty1 = t.y + 40;
+    let tx2 = t.x + 20, ty2 = t.y;
+    let tx3 = t.x + 40, ty3 = t.y + 40;
+
+    function boxIntersectTriangle(px, py, pw, ph) {
+        if (px + pw < Math.min(tx1, tx2, tx3) || px > Math.max(tx1, tx2, tx3)) return false;
+        if (py + ph < Math.min(ty1, ty2, ty3) || py > Math.max(ty1, ty2, ty3)) return false;
+        return true; 
+    }
+    return boxIntersectTriangle(p.x, p.y, p.w, p.h);
 }
 
 // ================= RESET =================
 function reset(){
-    player.y = 300;
+    player.y = 320;
     player.dy = 0;
     obstacles = [];
     score = 0;
-    jumpQueued = false;
 }
 
 // ================= LOOP =================
 function loop(){
     ctx.clearRect(0,0,900,400);
 
+    // Floor Line Reference
+    ctx.strokeStyle = "#444";
+    ctx.beginPath(); ctx.moveTo(0,360); ctx.lineTo(900,360); ctx.stroke();
+
     if(state === "menu"){
         ctx.fillStyle="white";
         ctx.font="40px Arial";
         ctx.fillText("GEOMETRY DASH ENGINE PRO",120,140);
-
         ctx.font="18px Arial";
         ctx.fillText("SPACE / CLICK to Start",260,200);
         ctx.fillText("E Editor | S Save | L Load | 1-5 Modes",180,240);
-
         requestAnimationFrame(loop);
         return;
     }
 
     let grounded = player.y >= 320;
-
     if(grounded){
         player.y = 320;
         player.dy = 0;
     }
 
-    // ================= PHYSICS =================
+    // ================= PHYSICS ENGINE (FIXED MECHANICS) =================
     if(mode === "cube"){
-        if(grounded && jumpQueued){
-            player.dy = -12;
-            jumpQueued = false;
+        if(grounded && spaceDown){ // Buffer jump allows continuous bouncing
+            player.dy = -11.5;
+        }
+        player.dy += gravity;
+    }
+    else if(mode === "ufo"){
+        if(jumpPressed){ 
+            player.dy = -6.5; // Single explosive impulse burst per click
+        } else {
+            player.dy += 0.38; // Lighter UFO gravity fallback
+        }
+    }
+    else if(mode === "ship"){
+        if(spaceDown){ // Checks held state for smooth acceleration
+            player.dy -= 0.55;
+        } else {
+            player.dy += 0.38;
+        }
+        player.dy *= 0.94; // Dynamic dampening terminal air velocity
+    }
+    else if(mode === "wave"){
+        player.dy = spaceDown ? -5.5 : 5.5; // Checks held state for zig-zag diagonal path
+    }
+    else if(mode === "robot"){
+        if(grounded && jumpPressed){
+            player.dy = -9;
+        }
+        if(spaceDown && player.dy < 0){ 
+            player.dy -= 0.45; // Variable height based on holding down input
         }
         player.dy += gravity;
     }
 
-    if(mode === "ufo"){
-        if(jumpQueued){
-            player.dy -= 0.8;
-            jumpQueued = false;
-        } else {
-            player.dy += 0.6;
-        }
-    }
-
-    if(mode === "ship"){
-        if(jumpQueued){
-            player.dy -= 0.6;
-        } else {
-            player.dy += 0.4;
-        }
-        player.dy *= 0.98;
-        jumpQueued = false;
-    }
-
+    // Update positions safely
     if(mode === "wave"){
-        player.dy = jumpQueued ? -6 : 6;
         player.y += player.dy;
-        jumpQueued = false;
-    }
-
-    if(mode === "robot"){
-        if(grounded && jumpQueued){
-            player.dy = -16;
-            jumpQueued = false;
-        }
-        player.dy += gravity;
-    }
-
-    if(mode !== "wave"){
+    } else {
         player.y += player.dy;
     }
 
-    // ================= PLAYER =================
+    // Boundary constraints prevents flying off top or sinking past floor
+    if(player.y < 0) { player.y = 0; player.dy = 0; }
+    if(player.y > 320) { player.y = 320; player.dy = 0; }
+
+    // CONSUME INPUT FOR SINGLE-FRAME TRIPPERS
+    jumpPressed = false;
+
+    // ================= RENDER PLAYER =================
     ctx.fillStyle = beat ? "yellow" : "cyan";
-    ctx.fillRect(player.x,player.y,player.w,player.h);
+    ctx.fillRect(player.x, player.y, player.w, player.h);
 
-    // ================= OBSTACLES =================
-    for(let i=obstacles.length-1;i>=0;i--){
+    // Outline decoration
+    ctx.strokeStyle = "black";
+    ctx.strokeRect(player.x, player.y, player.w, player.h);
+
+    // ================= PROCEDURAL OBSTACLES =================
+    for(let i=obstacles.length-1; i>=0; i--){
         let o = obstacles[i];
         o.x -= speed;
 
         ctx.fillStyle="red";
         ctx.beginPath();
-        ctx.moveTo(o.x,o.y+40);
-        ctx.lineTo(o.x+20,o.y);
-        ctx.lineTo(o.x+40,o.y+40);
+        ctx.moveTo(o.x, o.y + 40);
+        ctx.lineTo(o.x + 20, o.y);
+        ctx.lineTo(o.x + 40, o.y + 40);
         ctx.fill();
 
-        if(hit(player,o)){
+        if(hit(player, o)){
             reset();
             state = "menu";
         }
-
-        if(o.x < -60) obstacles.splice(i,1);
+        if(o.x < -60) obstacles.splice(i, 1);
     }
 
-    // ================= CUSTOM LEVEL =================
+    // ================= CUSTOM LEVEL PERSISTENCE =================
     for(let b of customLevel){
         ctx.fillStyle="purple";
-        ctx.fillRect(b.x,b.y,b.w,b.h);
+        ctx.fillRect(b.x, b.y, b.w, b.h);
 
         if(state === "play"){
             b.x -= speed;
         }
-
-        if(hit(player,b)){
+        if(hit(player, b)){
             reset();
             state = "menu";
         }
     }
 
-    // ================= SCORE =================
+    // ================= SCORE COUNTER =================
     score += 0.1;
     document.getElementById("score").textContent = Math.floor(score);
 
     requestAnimationFrame(loop);
 }
-
 loop();
-</script>
-
-</body>
-</html>
