@@ -37,8 +37,9 @@ const ctx = canvas.getContext("2d");
 // ================= STATE =================
 let state = "menu";
 let editor = false;
-let holding = false;
-let jumpBuffer = 0;
+
+// TRUE one-shot input
+let jumpQueued = false;
 
 // ================= PLAYER =================
 const player = {
@@ -73,9 +74,8 @@ document.addEventListener("keydown",e=>{
         document.getElementById("stateText").textContent = "play";
     }
 
-    if(e.code==="Space"){
-        holding = true;
-        jumpBuffer = 6;
+    if(e.code === "Space"){
+        jumpQueued = true;
     }
 
     if(e.code==="KeyE"){
@@ -101,24 +101,9 @@ document.addEventListener("keydown",e=>{
 });
 
 document.addEventListener("keyup",e=>{
-    if(e.code==="Space") holding = false;
-});
-
-canvas.addEventListener("click",(e)=>{
-    if(state === "menu"){
-        state = "play";
-        document.getElementById("stateText").textContent = "play";
-        return;
+    if(e.code==="Space"){
+        // do NOT re-trigger jump spam
     }
-
-    if(editor){
-        const r = canvas.getBoundingClientRect();
-        let x = e.clientX - r.left;
-        let y = e.clientY - r.top;
-        customLevel.push({x,y,w:40,h:40});
-    }
-
-    holding = true;
 });
 
 // ================= MODE =================
@@ -147,6 +132,7 @@ function reset(){
     player.dy = 0;
     obstacles = [];
     score = 0;
+    jumpQueued = false;
 }
 
 // ================= LOOP =================
@@ -166,42 +152,51 @@ function loop(){
         return;
     }
 
-    if(jumpBuffer > 0) jumpBuffer--;
+    let grounded = player.y >= 320;
 
-    let onGround = player.y >= 320;
+    if(grounded){
+        player.y = 320;
+        player.dy = 0;
+    }
 
     // ================= PHYSICS =================
-    player.dy = Math.max(-18, Math.min(18, player.dy));
-
     if(mode === "cube"){
-        if(onGround && jumpBuffer > 0){
+        if(grounded && jumpQueued){
             player.dy = -12;
-            jumpBuffer = 0;
+            jumpQueued = false;
         }
         player.dy += gravity;
     }
 
     if(mode === "ufo"){
-        if(holding) player.dy -= 0.8;
-        else player.dy += 0.6;
+        if(jumpQueued){
+            player.dy -= 0.8;
+            jumpQueued = false;
+        } else {
+            player.dy += 0.6;
+        }
     }
 
     if(mode === "ship"){
-        if(holding) player.dy -= 0.6;
-        else player.dy += 0.4;
+        if(jumpQueued){
+            player.dy -= 0.6;
+        } else {
+            player.dy += 0.4;
+        }
         player.dy *= 0.98;
+        jumpQueued = false;
     }
 
     if(mode === "wave"){
-        player.dy = holding ? -6 : 6;
+        player.dy = jumpQueued ? -6 : 6;
         player.y += player.dy;
-        player.dy = 0;
+        jumpQueued = false;
     }
 
     if(mode === "robot"){
-        if(onGround && jumpBuffer > 0){
+        if(grounded && jumpQueued){
             player.dy = -16;
-            jumpBuffer = 0;
+            jumpQueued = false;
         }
         player.dy += gravity;
     }
@@ -209,9 +204,6 @@ function loop(){
     if(mode !== "wave"){
         player.y += player.dy;
     }
-
-    if(player.y > 320){ player.y = 320; player.dy = 0; }
-    if(player.y < 0){ player.y = 0; player.dy = 0; }
 
     // ================= PLAYER =================
     ctx.fillStyle = beat ? "yellow" : "cyan";
