@@ -38,6 +38,7 @@ const ctx = canvas.getContext("2d");
 let state = "menu";
 let editor = false;
 let holding = false;
+let jumpBuffer = 0;
 
 // ================= PLAYER =================
 const player = {
@@ -57,7 +58,6 @@ let obstacles = [];
 let customLevel = JSON.parse(localStorage.getItem("level")) || [];
 
 let score = 0;
-let frame = 0;
 
 // ================= BEAT =================
 let beat = false;
@@ -73,7 +73,10 @@ document.addEventListener("keydown",e=>{
         document.getElementById("stateText").textContent = "play";
     }
 
-    if(e.code==="Space") holding = true;
+    if(e.code==="Space"){
+        holding = true;
+        jumpBuffer = 6;
+    }
 
     if(e.code==="KeyE"){
         editor = !editor;
@@ -112,7 +115,7 @@ canvas.addEventListener("click",(e)=>{
         const r = canvas.getBoundingClientRect();
         let x = e.clientX - r.left;
         let y = e.clientY - r.top;
-        customLevel.push({x:x, y:y, w:40, h:40});
+        customLevel.push({x,y,w:40,h:40});
     }
 
     holding = true;
@@ -144,7 +147,6 @@ function reset(){
     player.dy = 0;
     obstacles = [];
     score = 0;
-    frame = 0;
 }
 
 // ================= LOOP =================
@@ -164,36 +166,49 @@ function loop(){
         return;
     }
 
-    frame++;
+    if(jumpBuffer > 0) jumpBuffer--;
 
-    // ================= PHYSICS =================
     let onGround = player.y >= 320;
 
+    // ================= PHYSICS =================
+    player.dy = Math.max(-18, Math.min(18, player.dy));
+
     if(mode === "cube"){
-        if(onGround && holding) player.dy = -12;
-        player.dy += gravity;
-    }
-
-    if(mode === "ufo"){
-        player.dy += holding ? -0.5 : 0.5;
-    }
-
-    if(mode === "ship"){
-        player.dy += holding ? -0.4 : 0.4;
-    }
-
-    if(mode === "wave"){
-        player.dy = holding ? -6 : 6;
-    }
-
-    if(mode === "robot"){
-        if(onGround && holding){
-            player.dy = -16;
+        if(onGround && jumpBuffer > 0){
+            player.dy = -12;
+            jumpBuffer = 0;
         }
         player.dy += gravity;
     }
 
-    player.y += player.dy;
+    if(mode === "ufo"){
+        if(holding) player.dy -= 0.8;
+        else player.dy += 0.6;
+    }
+
+    if(mode === "ship"){
+        if(holding) player.dy -= 0.6;
+        else player.dy += 0.4;
+        player.dy *= 0.98;
+    }
+
+    if(mode === "wave"){
+        player.dy = holding ? -6 : 6;
+        player.y += player.dy;
+        player.dy = 0;
+    }
+
+    if(mode === "robot"){
+        if(onGround && jumpBuffer > 0){
+            player.dy = -16;
+            jumpBuffer = 0;
+        }
+        player.dy += gravity;
+    }
+
+    if(mode !== "wave"){
+        player.y += player.dy;
+    }
 
     if(player.y > 320){ player.y = 320; player.dy = 0; }
     if(player.y < 0){ player.y = 0; player.dy = 0; }
@@ -222,12 +237,14 @@ function loop(){
         if(o.x < -60) obstacles.splice(i,1);
     }
 
-    // ================= CUSTOM BLOCKS =================
+    // ================= CUSTOM LEVEL =================
     for(let b of customLevel){
         ctx.fillStyle="purple";
         ctx.fillRect(b.x,b.y,b.w,b.h);
 
-        b.x -= speed;
+        if(state === "play"){
+            b.x -= speed;
+        }
 
         if(hit(player,b)){
             reset();
