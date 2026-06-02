@@ -10,7 +10,7 @@ body{
     margin:0;
     overflow:hidden;
     background:#111;
-    font-family:Arial,sans-serif;
+    font-family:Arial;
 }
 
 canvas{
@@ -62,7 +62,10 @@ let gameOver = false;
 let spaceDown = false;
 let jumpPressed = false;
 
-// ================= RESIZE FOR MOBILE =================
+// IMPORTANT: keep focus so Space always works
+window.addEventListener("load", () => window.focus());
+
+// resize for mobile
 function resize(){
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight * 0.5;
@@ -70,7 +73,7 @@ function resize(){
 window.addEventListener("resize", resize);
 resize();
 
-// ================= RESET =================
+// RESET
 function reset(){
     player.y = 300;
     player.dy = 0;
@@ -81,14 +84,23 @@ function reset(){
     gameOver = false;
 }
 
-// ================= INPUT (PC) =================
+// ================= INPUT FIXED =================
+
+// PC
 document.addEventListener("keydown", e => {
+
     if(e.code === "Space"){
         e.preventDefault();
-        if(!spaceDown) jumpPressed = true;
+
+        if(!spaceDown){
+            jumpPressed = true;
+        }
+
         spaceDown = true;
 
-        if(gameOver) reset();
+        if(gameOver){
+            reset();
+        }
     }
 });
 
@@ -98,22 +110,28 @@ document.addEventListener("keyup", e => {
     }
 });
 
-// ================= INPUT (MOBILE) =================
+// MOBILE
 document.addEventListener("touchstart", e => {
     e.preventDefault();
 
-    if(!spaceDown) jumpPressed = true;
+    if(!spaceDown){
+        jumpPressed = true;
+    }
+
     spaceDown = true;
 
-    if(gameOver) reset();
-});
+    if(gameOver){
+        reset();
+    }
+},{passive:false});
 
 document.addEventListener("touchend", () => {
     spaceDown = false;
 });
 
-// ================= SPIKE PATTERNS =================
+// SPIKE PATTERNS
 setInterval(() => {
+
     if(gameOver) return;
 
     let pattern = Math.floor(Math.random()*5);
@@ -142,7 +160,7 @@ setInterval(() => {
 
 },1200);
 
-// ================= COLLISION =================
+// COLLISION
 function collision(a,b){
     return (
         a.x < b.x + b.w &&
@@ -152,7 +170,7 @@ function collision(a,b){
     );
 }
 
-// ================= SPIKE DRAW =================
+// SPIKE DRAW
 function drawSpike(x,y){
     ctx.fillStyle="red";
     ctx.beginPath();
@@ -167,19 +185,19 @@ function drawSpike(x,y){
     ctx.stroke();
 }
 
-// ================= LOOP =================
+// LOOP
 function loop(){
 
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // background
+    // SKY
     let sky = ctx.createLinearGradient(0,0,0,canvas.height);
     sky.addColorStop(0,"#0d1b5e");
     sky.addColorStop(1,"#4a148c");
     ctx.fillStyle = sky;
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    // ground
+    // GROUND
     ctx.fillStyle="#333";
     ctx.fillRect(0,canvas.height-60,canvas.width,60);
 
@@ -197,10 +215,17 @@ function loop(){
             player.rotation += 0.15;
         }
 
+        // consume jump once per frame
+        if(jumpPressed && player.y >= 300){
+            player.dy = jumpPower;
+        }
+
+        jumpPressed = false;
+
         score += 0.1;
     }
 
-    // player
+    // PLAYER
     ctx.save();
     ctx.translate(player.x+20, player.y+20);
     ctx.rotate(player.rotation);
@@ -213,7 +238,7 @@ function loop(){
 
     ctx.restore();
 
-    // obstacles
+    // OBSTACLES
     for(let i=obstacles.length-1;i>=0;i--){
 
         let o = obstacles[i];
@@ -235,13 +260,14 @@ function loop(){
 
     scoreText.innerText = "Score: " + Math.floor(score);
 
+    // GAME OVER
     if(gameOver){
         ctx.fillStyle="white";
         ctx.font="40px Arial";
         ctx.fillText("GAME OVER",canvas.width/2 - 120,150);
 
         ctx.font="20px Arial";
-        ctx.fillText("Tap or Press SPACE to restart",canvas.width/2 - 160,190);
+        ctx.fillText("Press SPACE or TAP to restart",canvas.width/2 - 170,190);
     }
 
     requestAnimationFrame(loop);
