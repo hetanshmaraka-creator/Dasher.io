@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mini Geometry Dash</title>
+
 <style>
 body{
     margin:0;
@@ -15,6 +17,8 @@ canvas{
     display:block;
     margin:auto;
     border:3px solid white;
+    width:100vw;
+    height:50vh;
 }
 
 #score{
@@ -22,23 +26,23 @@ canvas{
     top:10px;
     left:10px;
     color:white;
-    font-size:24px;
+    font-size:20px;
     font-weight:bold;
 }
 </style>
 </head>
+
 <body>
 
 <div id="score">Score: 0</div>
-
-<canvas id="game" width="900" height="400"></canvas>
+<canvas id="game"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const scoreText = document.getElementById("score");
 
-const player = {
+let player = {
     x:120,
     y:300,
     w:40,
@@ -47,79 +51,98 @@ const player = {
     rotation:0
 };
 
+let gravity = 0.7;
+let jumpPower = -12;
+let speed = 6;
+
 let obstacles = [];
 let score = 0;
 let gameOver = false;
 
-const gravity = 0.7;
-const jumpPower = -12;
-const speed = 6;
+let spaceDown = false;
+let jumpPressed = false;
 
-// Jump
-document.addEventListener("keydown", e => {
+// ================= RESIZE FOR MOBILE =================
+function resize(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight * 0.5;
+}
+window.addEventListener("resize", resize);
+resize();
 
-    if(e.code === "Space"){
-        e.preventDefault();
-
-        if(gameOver){
-            reset();
-            return;
-        }
-
-        if(player.y >= 300){
-            player.dy = jumpPower;
-        }
-    }
-});
-
+// ================= RESET =================
 function reset(){
-    obstacles = [];
-    score = 0;
-    gameOver = false;
-
     player.y = 300;
     player.dy = 0;
     player.rotation = 0;
+
+    obstacles = [];
+    score = 0;
+    gameOver = false;
 }
 
-// Spike patterns
-setInterval(() => {
+// ================= INPUT (PC) =================
+document.addEventListener("keydown", e => {
+    if(e.code === "Space"){
+        e.preventDefault();
+        if(!spaceDown) jumpPressed = true;
+        spaceDown = true;
 
+        if(gameOver) reset();
+    }
+});
+
+document.addEventListener("keyup", e => {
+    if(e.code === "Space"){
+        spaceDown = false;
+    }
+});
+
+// ================= INPUT (MOBILE) =================
+document.addEventListener("touchstart", e => {
+    e.preventDefault();
+
+    if(!spaceDown) jumpPressed = true;
+    spaceDown = true;
+
+    if(gameOver) reset();
+});
+
+document.addEventListener("touchend", () => {
+    spaceDown = false;
+});
+
+// ================= SPIKE PATTERNS =================
+setInterval(() => {
     if(gameOver) return;
 
-    const pattern = Math.floor(Math.random() * 5);
+    let pattern = Math.floor(Math.random()*5);
 
-    switch(pattern){
-
-        case 0:
-            obstacles.push({x:900,y:320,w:40,h:40});
-            break;
-
-        case 1:
-            obstacles.push({x:900,y:320,w:40,h:40});
-            obstacles.push({x:940,y:320,w:40,h:40});
-            break;
-
-        case 2:
-            obstacles.push({x:900,y:320,w:40,h:40});
-            obstacles.push({x:940,y:320,w:40,h:40});
-            obstacles.push({x:980,y:320,w:40,h:40});
-            break;
-
-        case 3:
-            obstacles.push({x:900,y:320,w:40,h:40});
-            obstacles.push({x:1040,y:320,w:40,h:40});
-            break;
-
-        case 4:
-            obstacles.push({x:900,y:320,w:40,h:40});
-            obstacles.push({x:980,y:320,w:40,h:40});
-            obstacles.push({x:1060,y:320,w:40,h:40});
-            break;
+    if(pattern === 0){
+        obstacles.push({x:900,y:320,w:40,h:40});
+    }
+    else if(pattern === 1){
+        obstacles.push({x:900,y:320,w:40,h:40});
+        obstacles.push({x:940,y:320,w:40,h:40});
+    }
+    else if(pattern === 2){
+        obstacles.push({x:900,y:320,w:40,h:40});
+        obstacles.push({x:940,y:320,w:40,h:40});
+        obstacles.push({x:980,y:320,w:40,h:40});
+    }
+    else if(pattern === 3){
+        obstacles.push({x:900,y:320,w:40,h:40});
+        obstacles.push({x:1040,y:320,w:40,h:40});
+    }
+    else{
+        obstacles.push({x:900,y:320,w:40,h:40});
+        obstacles.push({x:980,y:320,w:40,h:40});
+        obstacles.push({x:1060,y:320,w:40,h:40});
     }
 
-},1400);
+},1200);
 
+// ================= COLLISION =================
 function collision(a,b){
     return (
         a.x < b.x + b.w &&
@@ -129,10 +152,9 @@ function collision(a,b){
     );
 }
 
+// ================= SPIKE DRAW =================
 function drawSpike(x,y){
-
-    ctx.fillStyle = "#ff3333";
-
+    ctx.fillStyle="red";
     ctx.beginPath();
     ctx.moveTo(x,y+40);
     ctx.lineTo(x+20,y);
@@ -140,74 +162,26 @@ function drawSpike(x,y){
     ctx.closePath();
     ctx.fill();
 
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle="white";
+    ctx.lineWidth=2;
     ctx.stroke();
 }
 
-function drawBackground(){
-
-    // Sky
-    const sky = ctx.createLinearGradient(0,0,0,400);
-    sky.addColorStop(0,"#0d1b5e");
-    sky.addColorStop(1,"#4a148c");
-
-    ctx.fillStyle = sky;
-    ctx.fillRect(0,0,900,400);
-
-    // Stars
-    ctx.fillStyle = "white";
-
-    for(let i=0;i<60;i++){
-
-        const x = (i*173 + score*0.2) % 900;
-        const y = (i*41) % 220;
-
-        ctx.fillRect(x,y,2,2);
-    }
-
-    // Mountains
-    ctx.fillStyle = "#1b1464";
-
-    for(let i=0;i<8;i++){
-
-        const x = (i*180) - ((score*0.8)%180);
-
-        ctx.beginPath();
-        ctx.moveTo(x,340);
-        ctx.lineTo(x+90,180);
-        ctx.lineTo(x+180,340);
-        ctx.fill();
-    }
-
-    // Decorative squares
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-
-    for(let i=0;i<20;i++){
-
-        const x = (i*120) - ((score*1.5)%120);
-
-        ctx.fillRect(x,100,60,60);
-    }
-
-    // Ground
-    ctx.fillStyle = "#333";
-    ctx.fillRect(0,340,900,60);
-
-    ctx.strokeStyle = "#888";
-    ctx.lineWidth = 3;
-
-    ctx.beginPath();
-    ctx.moveTo(0,340);
-    ctx.lineTo(900,340);
-    ctx.stroke();
-}
-
+// ================= LOOP =================
 function loop(){
 
-    ctx.clearRect(0,0,900,400);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    drawBackground();
+    // background
+    let sky = ctx.createLinearGradient(0,0,0,canvas.height);
+    sky.addColorStop(0,"#0d1b5e");
+    sky.addColorStop(1,"#4a148c");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // ground
+    ctx.fillStyle="#333";
+    ctx.fillRect(0,canvas.height-60,canvas.width,60);
 
     if(!gameOver){
 
@@ -226,28 +200,23 @@ function loop(){
         score += 0.1;
     }
 
-    // Draw cube
+    // player
     ctx.save();
-
-    ctx.translate(
-        player.x + player.w/2,
-        player.y + player.h/2
-    );
-
+    ctx.translate(player.x+20, player.y+20);
     ctx.rotate(player.rotation);
 
-    ctx.fillStyle = "#00ffff";
+    ctx.fillStyle="cyan";
     ctx.fillRect(-20,-20,40,40);
 
-    ctx.strokeStyle = "black";
+    ctx.strokeStyle="black";
     ctx.strokeRect(-20,-20,40,40);
 
     ctx.restore();
 
-    // Obstacles
+    // obstacles
     for(let i=obstacles.length-1;i>=0;i--){
 
-        const o = obstacles[i];
+        let o = obstacles[i];
 
         if(!gameOver){
             o.x -= speed;
@@ -264,21 +233,15 @@ function loop(){
         }
     }
 
-    scoreText.textContent =
-        "Score: " + Math.floor(score);
+    scoreText.innerText = "Score: " + Math.floor(score);
 
     if(gameOver){
+        ctx.fillStyle="white";
+        ctx.font="40px Arial";
+        ctx.fillText("GAME OVER",canvas.width/2 - 120,150);
 
-        ctx.fillStyle = "white";
-        ctx.font = "48px Arial";
-        ctx.fillText("GAME OVER",250,150);
-
-        ctx.font = "24px Arial";
-        ctx.fillText(
-            "Press SPACE to Restart",
-            260,
-            200
-        );
+        ctx.font="20px Arial";
+        ctx.fillText("Tap or Press SPACE to restart",canvas.width/2 - 160,190);
     }
 
     requestAnimationFrame(loop);
