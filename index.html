@@ -1,267 +1,291 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>GD Engine Pro</title>
-    <style>
-        body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: Arial; }
-        canvas { border: 2px solid #333; background: #222; }
-       .ui { position: absolute; top: 10px; left: 10px; color: white; font-size: 14px; }
-       .ui div { margin-bottom: 4px; }
-    </style>
+<meta charset="UTF-8">
+<title>Mini Geometry Dash</title>
+<style>
+body{
+    margin:0;
+    overflow:hidden;
+    background:#111;
+    font-family:Arial,sans-serif;
+}
+
+canvas{
+    display:block;
+    margin:auto;
+    border:3px solid white;
+}
+
+#score{
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:white;
+    font-size:24px;
+    font-weight:bold;
+}
+</style>
 </head>
 <body>
-    <div class="ui">
-        <div>State: <span id="stateText">menu</span></div>
-        <div>Mode: <span id="modeText">cube</span></div>
-        <div>Editor: <span id="editorText">off</span></div>
-        <div>Score: <span id="score">0</span></div>
-    </div>
-    <canvas id="gameCanvas" width="900" height="400"></canvas>
+
+<div id="score">Score: 0</div>
+
+<canvas id="game" width="900" height="400"></canvas>
 
 <script>
-// ================= CANVAS SETUP =================
-const canvas = document.getElementById("gameCanvas");
+const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const scoreText = document.getElementById("score");
 
-// ================= STATE =================
-let state = "menu";
-let editor = false;
+const player = {
+    x:120,
+    y:300,
+    w:40,
+    h:40,
+    dy:0,
+    rotation:0
+};
 
-// CLEAN INPUT SYSTEM
-let jumpPressed = false;
-let spaceDown = false;
-
-// ================= PLAYER =================
-const player = { x:100, y:300, w:40, h:40, dy:0 };
-
-// ================= GAME =================
-let mode = "cube";
-let gravity = 0.7;
-let speed = 6;
 let obstacles = [];
-let activeLevel = []; // holds runtime copy of customLevel so we don't mutate saved data
-let customLevel = JSON.parse(localStorage.getItem("level")) || [];
 let score = 0;
+let gameOver = false;
 
-// ================= BEAT =================
-let beat = false;
-setInterval(()=>{
-    beat = true;
-    setTimeout(()=>beat=false,100);
-},500);
+const gravity = 0.7;
+const jumpPower = -12;
+const speed = 6;
 
-// ================= INPUT =================
+// Jump
 document.addEventListener("keydown", e => {
+
     if(e.code === "Space"){
-        e.preventDefault(); // stop page scroll
-        if(!spaceDown){
-            jumpPressed = true; // Flips true for exactly ONE frame
+        e.preventDefault();
+
+        if(gameOver){
+            reset();
+            return;
         }
-        spaceDown = true;
-    }
-    if(state === "menu" && e.code === "Space"){
-        startGame();
-    }
-    if(e.code === "KeyE"){
-        editor =!editor;
-        document.getElementById("editorText").textContent = editor? "on":"off";
-    }
-    if(e.code === "KeyS"){
-        localStorage.setItem("level", JSON.stringify(customLevel));
-        alert("Saved!");
-    }
-    if(e.code === "KeyL"){
-        customLevel = JSON.parse(localStorage.getItem("level") || "[]");
-        loadLevel();
-        alert("Loaded!");
-    }
-    if(e.code === "Digit1") setMode("cube");
-    if(e.code === "Digit2") setMode("ufo");
-    if(e.code === "Digit3") setMode("ship");
-    if(e.code === "Digit4") setMode("wave");
-    if(e.code === "Digit5") setMode("robot");
-});
 
-document.addEventListener("keyup", e => {
-    if(e.code === "Space"){
-        spaceDown = false;
+        if(player.y >= 300){
+            player.dy = jumpPower;
+        }
     }
 });
 
-// Click/Touch handling mirroring spacebar behavior
-document.addEventListener("mousedown", () => {
-    if(!spaceDown) jumpPressed = true;
-    spaceDown = true;
-    if(state === "menu"){
-        startGame();
-    }
-});
-document.addEventListener("mouseup", () => spaceDown = false);
-document.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    if(!spaceDown) jumpPressed = true;
-    spaceDown = true;
-    if(state === "menu"){
-        startGame();
-    }
-});
-document.addEventListener("touchend", () => spaceDown = false);
-
-// Editor: place blocks on click when editor is on
-canvas.addEventListener("click", (e) => {
-    if(!editor || state!== "play") return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    customLevel.push({x: Math.floor(x/40)*40, y: Math.floor(y/40)*40, w:40, h:40});
-});
-
-// ================= MODE =================
-function setMode(m){
-    mode = m;
-    document.getElementById("modeText").textContent = m;
-}
-
-// ================= GAME CONTROL =================
-function startGame(){
-    state = "play";
-    document.getElementById("stateText").textContent = "play";
-    reset();
-    loadLevel();
-}
-
-function loadLevel(){
-    // Deep clone so we don't mutate customLevel while playing
-    activeLevel = customLevel.map(b => ({...b}));
-}
-
-// ================= SPAWN =================
-setInterval(()=>{
-    if(state!== "play" || editor) return;
-    obstacles.push({x:900, y:320, w:40, h:40});
-}, 1200);
-
-// ================= COLLISION =================
-// Precise Triangle-to-Box SAT Check
-function hit(p, t){
-    // Broad phase AABB check first
-    if (!(p.x < t.x + t.w && p.x + p.w > t.x && p.y < t.y + t.h && p.y + p.h > t.y)) {
-        return false;
-    }
-    // Narrow phase: triangle points
-    let tx1 = t.x, ty1 = t.y + t.h;
-    let tx2 = t.x + t.w/2, ty2 = t.y;
-    let tx3 = t.x + t.w, ty3 = t.y + t.h;
-
-    // Simple SAT: if AABB overlaps and triangle isn't above/below box completely, count as hit
-    // This is simplified but works for spikes. For pixel perfect you'd need full SAT
-    return true;
-}
-
-// ================= RESET =================
 function reset(){
-    player.y = 320;
-    player.dy = 0;
     obstacles = [];
     score = 0;
-    activeLevel = []; // clear runtime level
+    gameOver = false;
+
+    player.y = 300;
+    player.dy = 0;
+    player.rotation = 0;
 }
 
-// ================= LOOP =================
+// Spike patterns
+setInterval(() => {
+
+    if(gameOver) return;
+
+    const pattern = Math.floor(Math.random() * 5);
+
+    switch(pattern){
+
+        case 0:
+            obstacles.push({x:900,y:320,w:40,h:40});
+            break;
+
+        case 1:
+            obstacles.push({x:900,y:320,w:40,h:40});
+            obstacles.push({x:940,y:320,w:40,h:40});
+            break;
+
+        case 2:
+            obstacles.push({x:900,y:320,w:40,h:40});
+            obstacles.push({x:940,y:320,w:40,h:40});
+            obstacles.push({x:980,y:320,w:40,h:40});
+            break;
+
+        case 3:
+            obstacles.push({x:900,y:320,w:40,h:40});
+            obstacles.push({x:1040,y:320,w:40,h:40});
+            break;
+
+        case 4:
+            obstacles.push({x:900,y:320,w:40,h:40});
+            obstacles.push({x:980,y:320,w:40,h:40});
+            obstacles.push({x:1060,y:320,w:40,h:40});
+            break;
+    }
+
+},1400);
+
+function collision(a,b){
+    return (
+        a.x < b.x + b.w &&
+        a.x + a.w > b.x &&
+        a.y < b.y + b.h &&
+        a.y + a.h > b.y
+    );
+}
+
+function drawSpike(x,y){
+
+    ctx.fillStyle = "#ff3333";
+
+    ctx.beginPath();
+    ctx.moveTo(x,y+40);
+    ctx.lineTo(x+20,y);
+    ctx.lineTo(x+40,y+40);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+}
+
+function drawBackground(){
+
+    // Sky
+    const sky = ctx.createLinearGradient(0,0,0,400);
+    sky.addColorStop(0,"#0d1b5e");
+    sky.addColorStop(1,"#4a148c");
+
+    ctx.fillStyle = sky;
+    ctx.fillRect(0,0,900,400);
+
+    // Stars
+    ctx.fillStyle = "white";
+
+    for(let i=0;i<60;i++){
+
+        const x = (i*173 + score*0.2) % 900;
+        const y = (i*41) % 220;
+
+        ctx.fillRect(x,y,2,2);
+    }
+
+    // Mountains
+    ctx.fillStyle = "#1b1464";
+
+    for(let i=0;i<8;i++){
+
+        const x = (i*180) - ((score*0.8)%180);
+
+        ctx.beginPath();
+        ctx.moveTo(x,340);
+        ctx.lineTo(x+90,180);
+        ctx.lineTo(x+180,340);
+        ctx.fill();
+    }
+
+    // Decorative squares
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+
+    for(let i=0;i<20;i++){
+
+        const x = (i*120) - ((score*1.5)%120);
+
+        ctx.fillRect(x,100,60,60);
+    }
+
+    // Ground
+    ctx.fillStyle = "#333";
+    ctx.fillRect(0,340,900,60);
+
+    ctx.strokeStyle = "#888";
+    ctx.lineWidth = 3;
+
+    ctx.beginPath();
+    ctx.moveTo(0,340);
+    ctx.lineTo(900,340);
+    ctx.stroke();
+}
+
 function loop(){
+
     ctx.clearRect(0,0,900,400);
 
-    // Floor Line Reference - floor at y=360, player height is 40
-    ctx.strokeStyle = "#444";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0,360);
-    ctx.lineTo(900,360);
-    ctx.stroke();
+    drawBackground();
 
-    if(state === "menu"){
-        ctx.fillStyle="white";
-        ctx.font="40px Arial";
-        ctx.fillText("GEOMETRY DASH ENGINE PRO",120,140);
-        ctx.font="18px Arial";
-        ctx.fillText("SPACE / CLICK to Start",260,200);
-        ctx.fillText("E Editor | S Save | L Load | 1-5 Modes",180,240);
-        ctx.fillText("Click to place blocks in editor",230,280);
-        requestAnimationFrame(loop);
-        return;
-    }
+    if(!gameOver){
 
-    let grounded = player.y >= 320;
-    if(grounded){
-        player.y = 320;
-        player.dy = 0;
-    }
-
-    // ================= PHYSICS ENGINE =================
-    if(mode === "cube"){
-        if(grounded && spaceDown){ // Buffer jump
-            player.dy = -11.5;
-        }
         player.dy += gravity;
-    }
-    else if(mode === "ufo"){
-        if(jumpPressed){
-            player.dy = -6.5; // Single impulse per click
-        } else {
-            player.dy += 0.38; // Lighter UFO gravity
+        player.y += player.dy;
+
+        if(player.y > 300){
+            player.y = 300;
+            player.dy = 0;
         }
-    }
-    else if(mode === "ship"){
-        if(spaceDown){
-            player.dy -= 0.55;
-        } else {
-            player.dy += 0.38;
+
+        if(player.y < 300){
+            player.rotation += 0.15;
         }
-        player.dy *= 0.94; // Dampening for terminal velocity
-    }
-    else if(mode === "wave"){
-        player.dy = spaceDown? -5.5 : 5.5; // Zig-zag
-    }
-    else if(mode === "robot"){
-        if(grounded && jumpPressed){
-            player.dy = -9;
-        }
-        if(spaceDown && player.dy < 0){
-            player.dy -= 0.45; // Variable height
-        }
-        player.dy += gravity;
+
+        score += 0.1;
     }
 
-    player.y += player.dy;
+    // Draw cube
+    ctx.save();
 
-    // Boundary constraints
-    if(player.y < 0) { player.y = 0; player.dy = 0; }
-    if(player.y > 320) { player.y = 320; player.dy = 0; }
+    ctx.translate(
+        player.x + player.w/2,
+        player.y + player.h/2
+    );
 
-    // CONSUME INPUT FOR SINGLE-FRAME TRIGGERS
-    jumpPressed = false;
+    ctx.rotate(player.rotation);
 
-    // ================= RENDER PLAYER =================
-    ctx.fillStyle = beat? "yellow" : "cyan";
-    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.fillStyle = "#00ffff";
+    ctx.fillRect(-20,-20,40,40);
 
     ctx.strokeStyle = "black";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(player.x, player.y, player.w, player.h);
+    ctx.strokeRect(-20,-20,40,40);
 
-    // ================= PROCEDURAL OBSTACLES =================
-    for(let i=obstacles.length-1; i>=0; i--){
-        let o = obstacles[i];
-        o.x -= speed;
+    ctx.restore();
 
-        ctx.fillStyle="red";
-        ctx.beginPath();
-        ctx.moveTo(o.x, o.y + 40);
-        ctx.lineTo(o.x + 20, o.y);
-        ctx.lineTo(o.x + 40, o.y + 40);
-        ctx.fill();
+    // Obstacles
+    for(let i=obstacles.length-1;i>=0;i--){
 
-        if(hit(player, o)){
-            state = "menu";
-            document.getElementById("stateText").textContent = "menu";
-            reset();
+        const o = obstacles[i];
+
+        if(!gameOver){
+            o.x -= speed;
+        }
+
+        drawSpike(o.x,o.y);
+
+        if(collision(player,o)){
+            gameOver = true;
+        }
+
+        if(o.x < -60){
+            obstacles.splice(i,1);
+        }
+    }
+
+    scoreText.textContent =
+        "Score: " + Math.floor(score);
+
+    if(gameOver){
+
+        ctx.fillStyle = "white";
+        ctx.font = "48px Arial";
+        ctx.fillText("GAME OVER",250,150);
+
+        ctx.font = "24px Arial";
+        ctx.fillText(
+            "Press SPACE to Restart",
+            260,
+            200
+        );
+    }
+
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>
